@@ -113,7 +113,7 @@ class Game{
 		enum AIDifficulty Diff; //Difficulty of the AI
 		
 		void printDeck(vector<Card> d){
-			vector<vector<string>> asciiCards;
+			vector<vector<string>> dislplayLines;
 			for (Card& c : d){
 				string val = displayValue(c.value);
 				if (val.size() == 1) val += " "; // pad single-char values so 10 aligns
@@ -126,11 +126,11 @@ class Game{
 				lines[3] = "|"+s+v+" "+ val + "|";
 				lines[4] = " ----- ";
 
-				asciiCards.push_back(lines);
+				dislplayLines.push_back(lines);
 			}
 
 			for (int i = 0; i < 5; i++){ // 5 lines per card
-				for (auto& cardLines : asciiCards){
+				for (auto& cardLines : dislplayLines){
 					cout << cardLines[i] << " ";
 				}
 				cout << "\n";
@@ -142,24 +142,24 @@ class Game{
 			shuffle(begin(deck), end(deck), rng);
 		}
 
-		void setDeck(){
-			for (int i = 0; i < 4; i++){
-				for (int j = 0; j < 13; j++){
+		void setDeck(){ //Creates a Sorted Starter Deck
+			for (int i = 0; i < 4; i++){  //Go through the 4 Suits
+				for (int j = 0; j < 13; j++){ //Create cards of the same suit from 0-12
 					deck.push_back(Card(Suits[i], j));
 				}
 			}
 		}		
-		void dealCard(Player& plr){
+		void dealCard(Player& plr){ //Grabs a card from the deck and places it in the players hand whilst removing it
 			plr.hand.push_back(deck.back());
 			deck.pop_back();
 		}
-		void setTable(int n){ //n is the number of cards
+		void setTable(int n){ //sets the playing table,n is the number of cards
 			for(int i = 0; i < n;i++){
 				table.push_back(deck.back());
 				deck.pop_back();
 			}
 		}
-		void AI_CountCard(Carc c){
+		void AI_CountCard(Carc c){ //Card Counting algorithm
 			if(1 < c.value < 5){
 				return 1;
 			}else if (9 < c.value < 12 || c.value == 0){
@@ -168,14 +168,14 @@ class Game{
 				return 0;
 			}
 		}
-		void AI_AddToMemory(Card c,int limit){
+		void AI_AddToMemory(Card c,int limit){ //Basic AI "Memory" implementation
 			if (AIMemory.size() <= AIMemoryLimit){
 				AIMemory.push_back(c);
 			}else{
 				AIMemory.pop_back();
 			}
 		}
-		void AI_CalcProb(){
+		void AI_CalcProb(){ //Calculate the probability of the appearance of each remaining card
 			float stdProb = deck.size()/52;
 			unordered_map<int,int> probTable; //Key -> Card Value,Value -> Amount seen
 			for(int i = 0;i < AIMemory.size();i++){
@@ -191,7 +191,7 @@ class Game{
 				
 			}
 		};
-		void AIPlay(Player clanker,int GT,enum AIDifficulty diff){
+		void AIPlay(Player clanker,int GT,enum AIDifficulty diff){ //AI play
 			AIMemoryLimit = diff;
 			vector<Card> &clankerHand = clanker.hand;
 			vector<Card> &clankerbin = clanker.bin;
@@ -251,18 +251,18 @@ class Xeri: public Game{
 			if (c1.value != c2.value){
 				return 0;
 			}else{
-				if (cg){
-					if (a || b){
+				if (cg){ //If is a custom game
+					if (a || b){ //if it has a A/10/Q/K or 2 of clubs
 						return CG[3];
-					}else if(c1.value != 10){
+					}else if(c1.value != 10){ //if it has a Xeri that is not a Jack
 						return CG[2];
 					}
 					else{
-						return CG[4];
+						return CG[4]; //If it is a Jack Xeri
 					}
 					
 				}else{
-					if (c1.value != 10){
+					if (c1.value != 10){ //If is a Xeri that isnt a Jack
 						return SG[2];
 					}else{
 						return SG[3];
@@ -276,6 +276,7 @@ class Xeri: public Game{
 			for (int i = 0;i < binSize;i++){
 				Card card = plr.bin.back();
 				plr.bin.pop_back();
+				
 				bool a = (find(begin(CGS), end(CGS), card.value) != end(CGS));
 				bool b = (card.value == 1 && card.suit == 'C');
 				bool c = (card.value == 9 && card.suit == 'D');
