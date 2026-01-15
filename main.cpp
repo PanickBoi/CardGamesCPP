@@ -159,7 +159,7 @@ class Game{
 				deck.pop_back();
 			}
 		}
-		void CountCard(Carc c){
+		void AI_CountCard(Carc c){
 			if(1 < c.value < 5){
 				return 1;
 			}else if (9 < c.value < 12 || c.value == 0){
@@ -168,14 +168,29 @@ class Game{
 				return 0;
 			}
 		}
-		void AddToMemory(Card c,int limit){
+		void AI_AddToMemory(Card c,int limit){
 			if (AIMemory.size() <= AIMemoryLimit){
 				AIMemory.push_back(c);
 			}else{
 				AIMemory.pop_back();
-				
 			}
 		}
+		void AI_CalcProb(){
+			float stdProb = deck.size()/52;
+			unordered_map<int,int> probTable; //Key -> Card Value,Value -> Amount seen
+			for(int i = 0;i < AIMemory.size();i++){
+				Card c = &AIMemory[i];
+				int CardValue = c.value;
+				if(probTable.find(CardValue) != probTable.end()){
+					probTable[CardValue]++;	
+				}else{
+					probTable[CardValue] = 1;
+				}
+			}
+			for (int count : probTable){
+				
+			}
+		};
 		void AIPlay(Player clanker,int GT,enum AIDifficulty diff){
 			AIMemoryLimit = diff;
 			vector<Card> &clankerHand = clanker.hand;
@@ -192,8 +207,10 @@ class Game{
 				switch(diff){
 					case Easy:
 						for (int i =0;i < clankerHand.size(); i++){
+							Card c = &clankerHand[i];
+							AI_AddToMemory(c,(int)diff);
+						};
 						
-						}
 						break;
 					case Medium:
 						break;
