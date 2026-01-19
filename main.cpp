@@ -20,6 +20,7 @@
 #include <bits/stdc++.h>
 #include <vector>
 #include <map>
+#include <set>
 
 using namespace std;
 char Suits[4] = {'H','D','S','C'};
@@ -123,7 +124,7 @@ class Game{
 				lines[0] = " _____ ";
 				lines[1] = "|" + val + "   |";
 				lines[2] = "|  " + s + "  |";
-				lines[3] = "|"+s+v+" "+ val + "|";
+				lines[3] = "|   " + val + "|";
 				lines[4] = " ----- ";
 
 				dislplayLines.push_back(lines);
@@ -159,27 +160,28 @@ class Game{
 				deck.pop_back();
 			}
 		}
-		void AI_CountCard(Carc c){ //Card Counting algorithm
-			if(1 < c.value < 5){
+		int AI_CountCard(Card c){ //Card Counting algorithm
+			if(c.value > 1 && c.value < 5){
 				return 1;
-			}else if (9 < c.value < 12 || c.value == 0){
+			}else if (c.value > 9 || c.value == 0){
 				return -1;
 			}else{
 				return 0;
 			}
 		}
 		void AI_AddToMemory(Card c,int limit){ //Basic AI "Memory" implementation
-			if (AIMemory.size() <= AIMemoryLimit){
+			if (AIMemory.size() < AIMemoryLimit){
 				AIMemory.push_back(c);
 			}else{
-				AIMemory.pop_back();
+				AIMemory.erase(AIMemory.begin());
+				AIMemory.push_back(c);
 			}
 		}
 		void AI_CalcProb(){ //Calculate the probability of the appearance of each remaining card
 			float stdProb = deck.size()/52;
 			unordered_map<int,int> probTable; //Key -> Card Value,Value -> Amount seen
 			for(int i = 0;i < AIMemory.size();i++){
-				Card c = &AIMemory[i];
+				Card c = AIMemory[i];
 				int CardValue = c.value;
 				if(probTable.find(CardValue) != probTable.end()){
 					probTable[CardValue]++;	
@@ -187,44 +189,10 @@ class Game{
 					probTable[CardValue] = 1;
 				}
 			}
-			for (int count : probTable){
+			for (auto& pair : probTable){
 				
 			}
-		};
-		void AIPlay(Player clanker,int GT,enum AIDifficulty diff){ //AI play
-			AIMemoryLimit = diff;
-			vector<Card> &clankerHand = clanker.hand;
-			vector<Card> &clankerbin = clanker.bin;
-			vector<Card> &clankerbin2 = clanker.bin2;
-			
-			int CardCountScore = 0; //Arbitary Score used in Card counting for the game Blackjack/21
-			//Turns out this score could also be used to "predict" the rest of the cards left in the deck
-			//and be used in other games too,like Xeri,where it dictates if you should risk throwing J/Q/K or A to force
-			//the opposition to play a number card and possibly get a Xeri or Collect all the cards with a J
-			
-			
-			if(GT== 0 ) { // Xeri Game
-				switch(diff){
-					case Easy:
-						for (int i =0;i < clankerHand.size(); i++){
-							Card c = &clankerHand[i];
-							AI_AddToMemory(c,(int)diff);
-						};
-						
-						break;
-					case Medium:
-						break;
-					case Hard:
-						break;
-					case Impossible:
-						break;
-					default:
-					
-						break;
-				}
-			}
 		}
-		
 };
 
 
@@ -260,7 +228,6 @@ class Xeri: public Game{
 					else{
 						return CG[4]; //If it is a Jack Xeri
 					}
-					
 				}else{
 					if (c1.value != 10){ //If is a Xeri that isnt a Jack
 						return SG[2];
@@ -305,6 +272,246 @@ class Xeri: public Game{
 			}
 			return score;
 		}
+		
+		//The fun stuff
+		void AIPlay(Player& clanker, Player& opponent, enum AIDifficulty diff) {
+			AIMemoryLimit = diff;
+			vector<Card>& clankerHand = clanker.hand;
+			vector<Card>& clankerBin = clanker.bin;
+			vector<Card>& clankerBin2 = clanker.bin2;
+			
+			int CCS = 0; //Card Counting Score,an arbitary point system inorder to count cants in games like blackjack (useful in xeri too)
+			
+			//Update AI memory with given cardss
+			for (const Card& c : table) {
+				AI_AddToMemory(c, AIMemoryLimit);
+				CCS += AI_CountCard(c);
+			}
+			
+			Card bestCard; //Card to play
+			int bestScore = -1000;
+			bool foundMove = false;
+			Card topC = table.empty() ? Card() : table.back();
+			
+			switch(diff) {
+				case Easy: {
+					//Basic strategy: Try to match top card, else play lowest value
+					if (!table.empty()) {
+						Card topCard = table.back();
+						//First try to match for Xeri
+						for (int i = 0; i < clankerHand.size(); i++) {
+							if (clankerHand[i].value == topCard.value) { //if it has a xeri,play it
+								bestCard = clankerHand[i];
+								foundMove = true;
+								break;
+							}
+						}
+					}
+					
+					//If no match, play lowest value card
+					if (!foundMove) {
+						//Count how many of each value we've seen in memory
+						map<int, int> seenCounts;
+						for (Card& mem : AIMemory) {
+							seenCounts[mem.value]++;
+						}
+						
+						int bestSafety = -1;
+						int minVal = 13;
+						
+						for (Card& c : clankerHand) {
+							int seenValue = seenCounts[c.value];
+							
+							//if cardd is seen alot = safer
+							//also use the cards value as tiebreaker between choices
+							if (seenValue > bestSafety || 
+								(seenValue == bestSafety && c.value < minVal)) {
+								bestSafety = seenValue;
+								minVal = c.value;
+								bestCard = c;
+								foundMove = true;
+							}
+						}
+					}
+					break;
+				}
+				
+				case Medium: {
+					//Evaluate each card based on multiple factors
+					if (!table.empty()) {
+						for (Card& c : clankerHand) {
+							int score = 0;
+							//Prioritize Xeri's
+							if (c.value == topC.value) {
+								score += 100;
+								//Bonus for special Xeri cards (J, A, Q, K, 10, 2♣)
+								if (c.value == 10 || c.value == 0 || c.value == 11 || 
+									c.value == 12 || c.value == 9 || 
+									(c.value == 1 && c.suit == 'C')) {
+									score += 50;
+								}
+							}
+							
+							// Avoid giving away high-value cards
+							if (c.value == 0 || c.value >= 9) {
+								score -= 20;
+							} 
+							//Prefer playing duplicates (keep variety)
+							int dupeCount = 0;
+							for (const Card& h : clankerHand) {
+								if (h.value == c.value && !(h == c)) dupeCount++;
+							}
+							score += dupeCount * 5;
+							
+							if (score > bestScore) {
+								bestScore = score;
+								bestCard = c;
+								foundMove = true;
+							}
+						}
+					}
+					break;
+				}
+				
+				case Hard: {
+					//Uses Card counting,probabilities,pressure.
+					if (!table.empty()) {   
+						//Get the seen card values
+						map<int, int> seenCards;
+						for (Card& mem : AIMemory) {
+							seenCards[mem.value]++;
+						}
+						
+						for (Card& c : clankerHand) {
+							int score = 0;    
+							//Xeri evaluation with card counting
+							if (c.value == topC.value) {
+								score += 150;
+								//Calculate Xeri value
+								bool isSpecial = (c.value == 0 || c.value == 9 || 
+												c.value == 11 || c.value == 12 || 
+												(c.value == 1 && c.suit == 'C'));
+								if (c.value == 10) score += 200; // Jack Xeri highest
+								else if (isSpecial) score += 100;
+								else score += 50;
+							}
+							//Probability stuff
+							int dupeAmount = 4 - seenCards[c.value]; //Amount of cards of this value left (based on observations)
+							int unseenAmount = 52 - AIMemory.size();
+							float oppProb = 0.0f;
+
+							if (unseenAmount > 0) { //Check if the unseen amount is > 0 (for optimization since if it's 0 you got 2 problems = 1: 0/0 division,2: 0 means you've seen all the 4 cards of the same value
+								oppProb = (float)dupeAmount / unseenAmount; //Probability of the player having the card
+								score -= (int)(oppProb * 30); //Remove from the score the prob*30 inorder to force the AI to play safer cards
+							}
+							
+							//Jack Retention,basically keep jacks for the end so you can force 
+							if (c.value == 10 && c.value != topC.value) {
+								score -= 50;
+								srand(time(0));
+								int chance = rand() % 101;
+								score += (((rand()%200)+350)*(int)(chance >= 70)); //30% of the time the score will be overrided inorder to 
+																				   //"Push" the bot into playing a Jack inorder to break the playing order to force
+																				   //the oppoment into playing first (and risking giving the AI a Xeri)
+							}
+							
+							//Calculate Playing style based on the Count (Card Counting)
+							//High count = more high cards left
+							//Low count = more low cards left
+							if (CCS > 0) { 
+								if (c.value >= 9) score -= CCS*2;
+							} else if (CCS < 0) {
+								if (c.value >= 9) score += abs(CCS)*2;
+							}
+							
+							//Aggressive play
+							if (table.size() > 3) { //if there's a big card collection on the table
+								// Many cards on table, prioritize collection
+								int CV = 0; //Total value of ALL the cards
+								for (Card& tc : table){
+									CV += tc.value;
+								}
+								if (c.value == topC.value || CV > isXeri(c,topC)) score += CV; //Checks if you got a Xeri or if a Jack is optimal
+							}
+							
+							//Special cards
+							if (c.suit == 'D' && c.value == 9) score -= 50; // Keep 10♦
+							if (c.suit == 'C' && c.value == 1) score -= 50; // Keep 2♣
+		 
+							if (score > bestScore) {
+								bestScore = score;
+								bestCard = c;
+								foundMove = true;
+							}
+						}
+					}
+					break;
+				}
+				
+				case Impossible: {
+					//big cheater
+					if (!table.empty()) {
+						//Check oppoments hand for counters
+						set<int> oppValues; //player cards
+						for (Card& oppCard : opponent.hand) {
+							oppValues.insert(oppCard.value);
+						}
+						for (Card& c : clankerHand) {
+							int score = 0;
+							//Guaranteed Xeri
+							if (c.value == topC.value) {
+								score += 200;
+								if (c.value == 10) score += 5000;
+							}
+							
+							//Prioritize cards the player doesnt have
+							if (!table.empty() && oppValues.find(c.value) == oppValues.end()) {
+								score += 1000; // Opponent can't Xeri this
+							}
+							//Read the deck inorder to prepare for future card pulls
+							//if (!deck.empty()) {
+							//    Card nextCard = deck.back();
+							//    //Setup for future Xeri
+							//    if (clankerHand.size() > 1) {
+							//        for (Card& future : clankerHand) {
+							//            if (future.value == c.value && !(future == c)) {
+							//                score += 50; // Can Xeri our own card
+							//            }
+							//        }
+							//    }
+							//}
+							if (score > bestScore) {
+								bestScore = score;
+								bestCard = c;
+								foundMove = true;
+							}
+						}
+					}
+					break;
+				}
+			}
+			//E x e c u t e
+			if (foundMove) {
+				auto it = find(clankerHand.begin(), clankerHand.end(), bestCard); //get the card
+				if (it != clankerHand.end()) { //if the card actually exists (just incase)
+					Card playedCard = *it; //Get the played Card
+					clankerHand.erase(it); //Erase it from the clanker's dirty hands
+					table.push_back(playedCard); //Play the card
+					int xeriPoints = isXeri(playedCard, table.size() > 1 ? table[table.size()-2] : playedCard);
+					if (xeriPoints > 0) {
+						clanker.points += xeriPoints;
+						clankerBin2.push_back(playedCard);
+						for (Card& tc : table) {
+							clankerBin.push_back(tc);
+						}
+						table.clear();
+					}
+					//Update memory
+					AI_AddToMemory(playedCard, AIMemoryLimit);
+				}
+			}
+		}
+		
 		void Game(Player chosenOne,Player slopGPT,enum AIDifficulty diff){		
 			bool playerTurn = true;
 			setDeck();
@@ -346,13 +553,11 @@ class Xeri: public Game{
 							chosenOne.bin.push_back(move(tc));
 						}
 						table.clear();
-					}else{
-						chosenOne.bin.push_back(c);
 					}
 				}else{
-					
+					AIPlay(slopGPT, chosenOne, diff);
 				}			
-				playerTurn != playerTurn;
+				playerTurn = !playerTurn;
 			}
 			int plrPoints = PointCount(chosenOne,slopGPT);
 			int AIPoints = PointCount(slopGPT,chosenOne);
@@ -368,10 +573,10 @@ class Xeri: public Game{
 
 int main() {
 	system("chcp 65001"); // set UTF-8 codepage
-  cout << "Test Run..\n";
-  Player chosenOne;
-  Player slopGPT;
-  Xeri g;
-  g.Game(chosenOne,slopGPT,enum AIDifficulty Hard);
-  return 0;
+	cout << "Test Run..\n";
+	Player chosenOne;
+	Player slopGPT;
+	Xeri g;
+	g.Game(chosenOne,slopGPT,Hard);
+	return 0;
 }
